@@ -1,11 +1,7 @@
 package com.annual.jeerest.controllers.authentication;
 
-import java.util.Map;
-import java.util.UUID;
-
-import javax.validation.Valid;
-
 import com.annual.jeeshared.beans.ResetPasswordDTO;
+import com.annual.jeeshared.beans.VerifyAccountDTO;
 import com.annual.jeeshared.entity.User;
 import com.annual.jeeshared.entity.VerificationToken;
 import com.annual.jeeshared.security.beans.JwtRequest;
@@ -22,16 +18,16 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
+import java.util.Map;
+import java.util.UUID;
 
 
 @RestController
-@CrossOrigin
+@CrossOrigin(origins = "http://localhost:4200/")
 public class JwtAuthenticationController {
 
     @Autowired
@@ -52,17 +48,21 @@ public class JwtAuthenticationController {
     @Autowired
     EmailService emailService;
 
-    @RequestMapping(value = "/authenticate", method = RequestMethod.POST)
+    @PostMapping(value = "/authenticate")
     public ResponseEntity<?> createAuthenticationToken(@RequestBody JwtRequest authenticationRequest) throws Exception {
-        authenticate(authenticationRequest.getUsername(), authenticationRequest.getPassword());
+        try {
+            authenticate(authenticationRequest.getEmail(), authenticationRequest.getPassword());
+        } catch (Exception e) {
+            throw new Exception("Bad credentials.");
+        }
 
-        User user = userService.getByEmail(authenticationRequest.getUsername());
+        User user = userService.getByEmail(authenticationRequest.getEmail());
         if (!user.isEnabled()) {
             // TODO there should be a better way to handle exceptions
             throw new Exception("This account is not activated yet.");
         }
 
-        final UserDetails userDetails = userDetailsService.loadUserByUsername(authenticationRequest.getUsername());
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(authenticationRequest.getEmail());
         final String token = jwtTokenUtil.generateToken(userDetails);
         return ResponseEntity.ok(new JwtResponse(token, user));
     }
@@ -99,8 +99,8 @@ public class JwtAuthenticationController {
     }
 
     @PostMapping(value = "/verifyAccount")
-    public User verifyAccount(@RequestBody Map<String, String> body) throws Exception {
-        VerificationToken verificationToken = verificationTokenService.findByToken(body.get("token"));
+    public User verifyAccount(@RequestBody VerifyAccountDTO body) throws Exception {
+        VerificationToken verificationToken = verificationTokenService.findByToken(body.getToken());
 
         if (verificationToken == null || !verificationToken.isTokenValid())
             throw new Exception("The verification token does not exist or it has expired. Please try again.");
