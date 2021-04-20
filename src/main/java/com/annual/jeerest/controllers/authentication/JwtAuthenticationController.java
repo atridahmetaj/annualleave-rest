@@ -12,6 +12,7 @@ import com.annual.jeeshared.service.UserService;
 import com.annual.jeeshared.service.VerificationTokenService;
 import com.annual.jeeshared.utils.JwtTokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -61,10 +62,13 @@ public class JwtAuthenticationController {
             // TODO there should be a better way to handle exceptions
             throw new Exception("This account is not activated yet.");
         }
+        HttpHeaders httpHeader = new HttpHeaders();
+
 
         final UserDetails userDetails = userDetailsService.loadUserByUsername(authenticationRequest.getEmail());
         final String token = jwtTokenUtil.generateToken(userDetails);
-        return ResponseEntity.ok(new JwtResponse(token, user));
+        httpHeader.add("Authorization", token);
+        return ResponseEntity.ok(new JwtResponse(token,httpHeader, user));
     }
 
     @PostMapping(value = "/register")

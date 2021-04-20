@@ -1,12 +1,13 @@
 package com.annual.jeerest.controllers;
 
+import com.annual.jeeshared.beans.ApplicationDTO;
 import com.annual.jeeshared.beans.PostVacationDTO;
 import com.annual.jeeshared.constants.Constants;
 import com.annual.jeeshared.entity.Application;
-import com.annual.jeeshared.entity.User;
+import com.annual.jeeshared.enums.ApplicationStatus;
 import com.annual.jeeshared.service.ApplicationService;
 import com.annual.jeeshared.service.EmailService;
-import com.annual.jeeshared.utils.UserUtils;
+import com.annual.jeeshared.service.UserService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,10 +29,22 @@ public class ApplicationController {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private UserService userService;
+
     @PostMapping("/application")
-    public Application createApplication(@RequestBody Application application){
+    public Application createApplication(@RequestBody ApplicationDTO applicationDTO){
         logger.debug(Constants.CREATING_LEAVING_APPLICATION);
-        if (application.getRequestedBy().getCreatedAt().compareTo(new Date())<Constants.PROBATION_PERIOD) {
+
+        Application application = new Application();
+        application.setFrom(applicationDTO.getFrom());
+        application.setTo(applicationDTO.getTo());
+        application.setApplicationType(applicationDTO.getApplicationType());
+        application.setRequestedBy(userService.getById(applicationDTO.getUserId()));
+        application.setStatus(ApplicationStatus.PENDING);
+
+        if (application.getRequestedBy().getCreatedAt().compareTo(new Date())>Constants.PROBATION_PERIOD) {
+            emailService.sendApplicationMail(application,Constants.APPLICATION_CREATED);
             return applicationService.save(application);
         }
         return null;
@@ -41,7 +54,6 @@ public class ApplicationController {
     public ResponseEntity<?> updateVacation(@PathVariable("id") Long id, @RequestBody PostVacationDTO vacationDTO) throws ParseException {
 
         Application application = applicationService.getById(id);
-        User loggedInUser = UserUtils.getLoggedInUser();
         application.setFrom(vacationDTO.getStartDate());
         application.setTo(vacationDTO.getEndDate());
         application.setApplicationType(vacationDTO.getApplicationType());
@@ -50,17 +62,7 @@ public class ApplicationController {
         logger.debug(Constants.UPDATING_LEAVING_APPLICATION);
         applicationService.save(application);
 
-        // send email
-        User requester = application.getRequestedBy();
-
-        String[] sendTo = new String[2];
-        sendTo[0] = requester.getEmail();
-        if (loggedInUser.equals(requester.getAdmin()))
-            sendTo[1] = requester.getAdmin().getEmail();
-        else
-            sendTo[1] = requester.getTeamLeader().getEmail();
-
-        emailService.sendCustomEmail(sendTo, "STATUS UPDATE", application.toString());
+        emailService.sendApplicationMail(application,Constants.APPLICATION_UPDATED);
 
         return ResponseEntity.ok(application);
     }
