@@ -1,7 +1,6 @@
 package com.annual.jeerest.controllers;
 
 import com.annual.jeeshared.beans.ApplicationDTO;
-import com.annual.jeeshared.beans.PostVacationDTO;
 import com.annual.jeeshared.constants.Constants;
 import com.annual.jeeshared.entity.Application;
 import com.annual.jeeshared.enums.ApplicationStatus;
@@ -11,14 +10,16 @@ import com.annual.jeeshared.service.UserService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
-import java.util.Date;
+import java.util.List;
 
 @RestController
 @RequestMapping()
+@CrossOrigin(origins = "http://localhost:4200/")
 public class ApplicationController {
 
     private static final Logger logger = LogManager.getLogger(ApplicationController.class);
@@ -32,8 +33,20 @@ public class ApplicationController {
     @Autowired
     private UserService userService;
 
+
+    @GetMapping("/{id}/applications")
+    public List<Application> getAllApplications(@PathVariable("id") Long id){
+        return applicationService.getUserApplications(userService.getById(id));
+    }
+
+    @GetMapping("/applications/{id}")
+    public Application getApplication(@PathVariable("id") Long id){
+        return applicationService.getById(id);
+    }
+
+
     @PostMapping("/application")
-    public Application createApplication(@RequestBody ApplicationDTO applicationDTO){
+    public ResponseEntity<Object> createApplication(@RequestBody ApplicationDTO applicationDTO) throws Exception {
         logger.debug(Constants.CREATING_LEAVING_APPLICATION);
 
         Application application = new Application();
@@ -43,21 +56,22 @@ public class ApplicationController {
         application.setRequestedBy(userService.getById(applicationDTO.getUserId()));
         application.setStatus(ApplicationStatus.PENDING);
 
-        if (application.getRequestedBy().getCreatedAt().compareTo(new Date())>Constants.PROBATION_PERIOD) {
+        int diffInDays = (int) ((application.getRequestedBy().getCreatedAt().getTime()-application.getFrom().getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffInDays>Constants.PROBATION_PERIOD) {
             emailService.sendApplicationMail(application,Constants.APPLICATION_CREATED);
-            return applicationService.save(application);
+            return new ResponseEntity(applicationService.save(application), HttpStatus.OK);
         }
-        return null;
+        return new ResponseEntity("You are tired already? You are to early for vacations",HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @PutMapping(value = "/application/{id}")
-    public ResponseEntity<?> updateVacation(@PathVariable("id") Long id, @RequestBody PostVacationDTO vacationDTO) throws ParseException {
+    public ResponseEntity<?> updateApplication(@PathVariable("id") Long id, @RequestBody ApplicationDTO applicationDTO) throws ParseException {
 
         Application application = applicationService.getById(id);
-        application.setFrom(vacationDTO.getStartDate());
-        application.setTo(vacationDTO.getEndDate());
-        application.setApplicationType(vacationDTO.getApplicationType());
-        application.setStatus(vacationDTO.getStatus());
+        application.setFrom(applicationDTO.getFrom());
+        application.setTo(applicationDTO.getTo());
+        application.setApplicationType(applicationDTO.getApplicationType());
 
         logger.debug(Constants.UPDATING_LEAVING_APPLICATION);
         applicationService.save(application);
@@ -70,5 +84,10 @@ public class ApplicationController {
     @DeleteMapping("/application/{id}")
     public void deleteApplication(@PathVariable("id") Long id) {
         applicationService.deleteById(id);
+    }
+
+    @DeleteMapping("/application")
+    public void deleteApplication() {
+        applicationService.deleteAllApplications();
     }
 }
